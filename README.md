@@ -1,2 +1,4 @@
-### Hexlet tests and linter status:
-[![Actions Status](https://github.com/brahmanchik/php-project-9/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/brahmanchik/php-project-9/actions)
+### deployment example:
+[Пример](https://php-project-9-n5ou.onrender.com)
+Для того чтобы увидеть роутинг http запрос должен быть например вот таким
+```https://php-project-9-n5ou.onrender.com/hello/user```
