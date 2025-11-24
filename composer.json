@@ -13,7 +13,11 @@
         "slim/http": "^1.2",
         "slim/php-view": "^3.4",
         "php-di/php-di": "^7.0",
-        "slim/flash": "^0.4.0"
+        "slim/flash": "^0.4.0",
+        "symfony/var-dumper": "^7.3",
+        "illuminate/support": "^12.39",
+        "illuminate/validation": "^12.39",
+        "illuminate/translation": "^12.39"
     },
     "require-dev": {
         "squizlabs/php_codesniffer": "^4.0"
