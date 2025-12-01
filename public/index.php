@@ -1,17 +1,28 @@
 <?php
+session_start();
 require __DIR__ . '/../vendor/autoload.php';
 
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
+use Slim\Flash\Messages;
 use Slim\Views\PhpRenderer;
 
 use Illuminate\Validation\Factory;
 use Illuminate\Translation\ArrayLoader;
 use Illuminate\Translation\Translator;
-use Illuminate\Support\MessageBag;
+
+use App\UrlHelper;
+
+// Создаём контейнер
+$container = new \DI\Container();
+AppFactory::setContainer($container);
 
 $app = AppFactory::create();
+
+$container->set('flash', function () {
+    return new Messages();
+});
 
 $app->addRoutingMiddleware();
 
@@ -26,15 +37,21 @@ $dbh = new PDO($dsn, $user, $password);
 $app->get('/', function (Request $request, Response $response) {
     $renderer = new PhpRenderer(__DIR__ . '/../templates');
     $readmeContent = 'Для того чтобы увидеть роутинг в http запросe в конце url адреса добавтье это - /hello/user';
+    $flash = $this->get('flash');
+    $errors = $flash->getMessage('error'); // массив сообщений
     $viewData = [
-        'key1' => $readmeContent
+        'key1' => $readmeContent,
+        'errors' => $errors
     ];
     return $renderer->render($response, 'index.phtml', $viewData);
 });
 
 $app->post('/urls', function (Request $request, Response $response) use ($dbh) {
+    $flash = $this->get('flash');
     $data = $request->getParsedBody();
     $urlName = $data['url']['name'] ?? null;
+    //Здесь будет проверка на уникальность url с помощью класса UrlHelper
+
     //ниже будет валидация
     // Создаём Translator (заглушка)
     $translator = new Translator(new ArrayLoader(), 'en');
@@ -49,7 +66,7 @@ $app->post('/urls', function (Request $request, Response $response) use ($dbh) {
 
 // Правила валидации
     $rules = [
-        'url' => 'required|url'
+        'url' => 'required|url|max:255'
     ];
 
 // Создаём Validator
@@ -57,19 +74,54 @@ $app->post('/urls', function (Request $request, Response $response) use ($dbh) {
 
 // Проверяем
     if ($validator->fails()) {
-        dd("Неверный URL!\n");
-        print_r($validator->errors()->all());
+
+        $flash->addMessage('error', 'Неверный URL');
+        return $response
+            ->withHeader('Location', '/')
+            ->withStatus(302);
     } else {
-        dd("URL верный!\n");
+        $flash->addMessage('succes', 'Страница успешно добавлена');
+        $stmt = $dbh->prepare("INSERT INTO urls (name) VALUES (:name)");
+        $stmt->bindValue(':name', $urlName, PDO::PARAM_STR);
+        $stmt->execute();
+
+        $id = $dbh->lastInsertId();
+        return $response
+            ->withHeader('Location', "/urls/{$id}")
+            ->withStatus(302);
     }
     //выше валидация
-    $stmt = $dbh->prepare("INSERT INTO urls (name) VALUES (:name)");
-    $stmt->bindValue(':name', $urlName, PDO::PARAM_STR);
-    $stmt->execute();
+});
 
-    return $response
-        ->withHeader('Location', '/')
-        ->withStatus(302);
+//Реализуйте вывод конкретного введенного URL на отдельной странице urls/{id}
+//запихнуть в DI контейнер подключение к БД
+$app->get('/urls/{id}', function (Request $request, Response $response, array $args) use ($dbh) {
+    $renderer = new PhpRenderer(__DIR__ . '/../templates');
+    $flash = $this->get('flash');
+    $succes = $flash->getMessage('succes'); // массив сообщений
+    $id = $args['id'];
+    $stmt = $dbh->prepare("SELECT * FROM urls WHERE id = :id");
+    $stmt->bindValue(':id', $id, PDO::PARAM_STR);
+    $stmt->execute();
+    $url = $stmt->fetch(PDO::FETCH_ASSOC);
+    $viewData = [
+        'id' => $url['id'],
+        'name' => $url['name'],
+        'created_at' => $url['created_at'],
+        'succes' => $succes
+    ];
+    return $renderer->render($response, 'url.phtml', $viewData);
+});
+
+$app->get('/urls', function (Request $request, Response $response) use ($dbh) {
+    $renderer = new PhpRenderer(__DIR__ . '/../templates');
+    $stmt = $dbh->prepare("SELECT * FROM urls");
+    $stmt->execute();
+    $url = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $viewData = [
+        'urls' => $url, // передаём весь массив
+    ];
+    return $renderer->render($response, 'urls.phtml', $viewData);
 });
 
 // Run app

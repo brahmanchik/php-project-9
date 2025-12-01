@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS urls (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW() NOT NULL
-);
+    created_at TIMESTAMP(0) DEFAULT NOW() NOT NULL
+    );

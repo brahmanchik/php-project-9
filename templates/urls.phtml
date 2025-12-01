@@ -1,2 +1,28 @@
 <?=$this->fetch('header.phtml')?>
-<h1>Ниже будет список сайтов из БД</h1>
+<main class="flex-grow-1">
+    <div class="container-lg mt-3">
+        <h1>Сайты</h1>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover text-nowrap" data-test="urls">
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Имя</th>
+                    <th>Последняя проверка</th>
+                    <th>Код ответа</th>
+                </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($urls as $item): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($item['id']) ?></td>
+                        <td><?= htmlspecialchars($item['name']) ?></td>
+                        <td><?= htmlspecialchars($item['created_at']) ?></td>
+                        <td>Тут потом будет код ответа</td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
