@@ -6,6 +6,7 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
 use Slim\Flash\Messages;
+use Slim\Routing\RouteContext;
 use Slim\Views\PhpRenderer;
 
 use Illuminate\Validation\Factory;
@@ -36,15 +37,13 @@ $dbh = new PDO($dsn, $user, $password);
 // Define app routes
 $app->get('/', function (Request $request, Response $response) {
     $renderer = new PhpRenderer(__DIR__ . '/../templates');
-    $readmeContent = 'Для того чтобы увидеть роутинг в http запросe в конце url адреса добавтье это - /hello/user';
     $flash = $this->get('flash');
     $errors = $flash->getMessage('error'); // массив сообщений
     $viewData = [
-        'key1' => $readmeContent,
         'errors' => $errors
     ];
     return $renderer->render($response, 'index.phtml', $viewData);
-});
+})->setName('index');
 
 $app->post('/urls', function (Request $request, Response $response) use ($dbh) {
     $flash = $this->get('flash');
@@ -76,8 +75,11 @@ $app->post('/urls', function (Request $request, Response $response) use ($dbh) {
     if ($validator->fails()) {
 
         $flash->addMessage('error', 'Неверный URL');
+        $redirectUrl = RouteContext::fromRequest($request)
+            ->getRouteParser()
+            ->urlFor('index');
         return $response
-            ->withHeader('Location', '/')
+            ->withHeader('Location', $redirectUrl)
             ->withStatus(302);
     } else {
         $flash->addMessage('succes', 'Страница успешно добавлена');
