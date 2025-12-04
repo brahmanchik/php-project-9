@@ -50,7 +50,20 @@ $app->post('/urls', function (Request $request, Response $response) use ($dbh) {
     $data = $request->getParsedBody();
     $urlName = $data['url']['name'] ?? null;
     //Здесь будет проверка на уникальность url с помощью класса UrlHelper
+    if ($urlName != null) {
+        $urlChecker = new UrlHelper($dbh);
+        if ($urlChecker->createIfNotExists($urlName) === false) {
+            $flash->addMessage('succes', 'Страница уже существует');
+            $stmt = $dbh->prepare("INSERT INTO urls (name) VALUES (:name)");
+            $stmt->bindValue(':name', $urlName, PDO::PARAM_STR);
+            $stmt->execute();
 
+            $id = $dbh->lastInsertId();
+            return $response
+                ->withHeader('Location', "/urls/{$id}")
+                ->withStatus(302);
+        }
+    }
     //ниже будет валидация
     // Создаём Translator (заглушка)
     $translator = new Translator(new ArrayLoader(), 'en');
@@ -110,7 +123,8 @@ $app->get('/urls/{id}', function (Request $request, Response $response, array $a
         'id' => $url['id'],
         'name' => $url['name'],
         'created_at' => $url['created_at'],
-        'succes' => $succes
+        'succes' => $succes,
+        'checks' => []  // <<< временно пусто
     ];
     return $renderer->render($response, 'url.phtml', $viewData);
 });

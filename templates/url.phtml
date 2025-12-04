@@ -1,27 +1,66 @@
 <?=$this->fetch('header.phtml')?>
-<div class="container-lg mt-3">
-    <h1><?= $name; ?></h1>
-    <div class="table-responsive">
-        <table class="table table-bordered table-hover text-nowrap" data-test="url">
+<?php if (!empty($succes)) : ?>
+    <div class="alert alert-success mt-6" role="alert">
+        <?= htmlspecialchars($succes[0]) ?>
+    </div>
+<?php endif; ?>
+<main class="flex-grow-1">
+    <div class="container-lg mt-3">
+
+
+        <h1>Сайт: <?= htmlspecialchars($name) ?></h1>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover text-nowrap" data-test="url">
+                <tbody>
+                <tr>
+                    <td>ID</td>
+                    <td><?= htmlspecialchars($id) ?></td>
+                </tr>
+                <tr>
+                    <td>Имя</td>
+                    <td><?= htmlspecialchars($name) ?></td>
+                </tr>
+                <tr>
+                    <td>Дата создания</td>
+                    <td><?= htmlspecialchars($created_at) ?></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h2 class="mt-5 mb-3">Проверки</h2>
+
+        <form method="post" action="/urls/<?= htmlspecialchars($id) ?>/checks">
+            <input type="submit" class="btn btn-primary" value="Запустить проверку">
+        </form>
+
+        <table class="table table-bordered table-hover mt-3" data-test="checks">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Код ответа</th>
+                <th>h1</th>
+                <th>title</th>
+                <th>description</th>
+                <th>Дата создания</th>
+            </tr>
+            </thead>
             <tbody>
-            <tr>
-                <td>ID</td>
-                <td><?= $id ?></td>
-            </tr>
-            <tr>
-                <td>Имя</td>
-                <td><?= $name; ?></td>
-            </tr>
-            <tr>
-                <td>Дата создания</td>
-                <td><?= $created_at; ?></td>
-            </tr>
+            <?php foreach ($checks as $check): ?>
+                <tr>
+                    <td><?= htmlspecialchars($check['id']) ?></td>
+                    <td><?= htmlspecialchars($check['status_code']) ?></td>
+                    <td><?= htmlspecialchars($check['h1']) ?></td>
+                    <td><?= htmlspecialchars($check['title']) ?></td>
+                    <td><?= htmlspecialchars($check['description']) ?></td>
+                    <td><?= htmlspecialchars($check['created_at']) ?></td>
+                </tr>
+            <?php endforeach; ?>
             </tbody>
         </table>
+
     </div>
-    <?php if (!empty($succes)) : ?>
-    <small class="text-danger">
-        <?= htmlspecialchars($succes[0]); ?>
-    </small>
-    <?php endif; ?>
-</div>
+</main>
+
+<?=$this->fetch('footer.phtml')?>
