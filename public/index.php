@@ -66,7 +66,7 @@ $app->post('/urls', function (Request $request, Response $response) use ($dbh) {
     //Здесь будет проверка на уникальность url с помощью класса UrlHelper
     if ($urlName != null) {
         $urlChecker = new UrlHelper($dbh);
-        if ($urlChecker->createIfNotExists($urlName) === false) {
+        if ($urlChecker->createIfNotExists($urlName)) {
             $flash->addMessage('succes', 'Страница уже существует');
             $stmt = $dbh->prepare("INSERT INTO urls (name) VALUES (:name)");
             $stmt->bindValue(':name', $urlName, PDO::PARAM_STR);
