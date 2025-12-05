@@ -29,9 +29,23 @@ $app->addRoutingMiddleware();
 
 $errorMiddleware = $app->addErrorMiddleware(true, true, true);
 
-$dsn = 'pgsql:host=127.0.0.1;port=5432;dbname=hexlet_db_dev;';
-$user = 'a1111';
-$password = '';
+if (!empty($_ENV['DATABASE_URL'])) {
+    $url = parse_url($_ENV['DATABASE_URL']);
+
+    $host = $url['host'];
+    $port = $url['port'];
+    $dbName = ltrim($url['path'], '/');
+    $user = $url['user'];
+    $password = $url['pass'];
+
+    $dsn = "pgsql:host=$host;port=$port;dbname=$dbName";
+} else {
+    // ЛОКАЛЬНАЯ БАЗА
+    $dsn = 'pgsql:host=127.0.0.1;port=5432;dbname=hexlet_db_dev;';
+    $user = 'a1111';
+    $password = '';
+}
+
 $dbh = new PDO($dsn, $user, $password);
 
 // Define app routes
