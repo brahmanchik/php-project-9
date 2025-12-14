@@ -48,6 +48,10 @@ if (!empty($_ENV['DATABASE_URL'])) {
 
 $dbh = new PDO($dsn, $user, $password);
 
+$initFilePath = implode('/', [dirname(__DIR__), 'database.sql']);
+$initSql = file_get_contents($initFilePath);
+$dbh->exec($initSql);
+
 // Define app routes
 $app->get('/', function (Request $request, Response $response) {
     $renderer = new PhpRenderer(__DIR__ . '/../templates');
