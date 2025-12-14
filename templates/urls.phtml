@@ -25,7 +25,7 @@
                                 <?= htmlspecialchars($item['name']) ?>
                             </a>
                         </td>
-                        <td><?= htmlspecialchars($item['created_at']) ?></td>
+                        <td><?= htmlspecialchars($item['last_check_at'] ?? '') ?></td>
                         <td>
                             <?= isset($item['status_code']) ? htmlspecialchars($item['status_code']) : '' ?>
                         </td>

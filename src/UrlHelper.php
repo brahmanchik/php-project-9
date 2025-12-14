@@ -11,17 +11,31 @@ class UrlHelper
         $this->dbh = $dbh;
     }
 
-    public function createIfNotExists(string $url): bool
+    public static function normalize(string $url): string {
+        $parts = parse_url($url);
+        $scheme = $parts['scheme'] ?? 'http';
+        $host   = $parts['host'] ?? '';
+        $port   = isset($parts['port']) ? ':' . $parts['port'] : '';
+        $path   = $parts['path'] ?? '';
+        return $scheme . '://' . $host . $port . $path;
+    }
+    public function findIdByUrl(string $url): ?int
     {
-        $stmt = $this->dbh->prepare("SELECT COUNT(1) as cnt FROM urls WHERE name = :url");
+        $url = self::normalize($url);
+
+        $stmt = $this->dbh->prepare(
+            "SELECT id FROM urls WHERE name = :url LIMIT 1"
+        );
         $stmt->bindValue(':url', $url, PDO::PARAM_STR);
         $stmt->execute();
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($result['cnt'] == 0) {
-            return true; // такого URL в базе ещё нет
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($row === false) {
+            return null; // URL не найден
         }
 
-        return false; // URL уже есть
+        return (int) $row['id']; // URL уже есть → возвращаем id
     }
 }
+
