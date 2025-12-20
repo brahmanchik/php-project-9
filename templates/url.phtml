@@ -4,6 +4,11 @@
         <?= htmlspecialchars($succes[0]) ?>
     </div>
 <?php endif; ?>
+<?php if (!empty($errors)) : ?>
+    <div class="alert alert-danger mt-6" role="alert">
+        <?= htmlspecialchars($errors[0]) ?>
+    </div>
+<?php endif; ?>
 <main class="flex-grow-1">
     <div class="container-lg mt-3">
 
@@ -51,7 +56,7 @@
          <?php foreach ($checks as $check) : ?>
                 <tr>
                     <td><?= htmlspecialchars($check['id']) ?></td>
-                    <td></td>
+                    <td><?= htmlspecialchars($check['status_code'] ?? '') ?></td>
                     <td></td>
                     <td></td>
                     <td></td>

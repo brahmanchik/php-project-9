@@ -13,8 +13,11 @@ use Illuminate\Validation\Factory;
 use Illuminate\Translation\ArrayLoader;
 use Illuminate\Translation\Translator;
 
-use App\UrlHelper;
 
+use App\UrlHelper;
+use App\UrlChecker;
+//dd($_SERVER);
+//dd(getenv('DIMA123'));
 // Создаём контейнер
 $container = new \DI\Container();
 AppFactory::setContainer($container);
@@ -29,9 +32,19 @@ $app->addRoutingMiddleware();
 
 $errorMiddleware = $app->addErrorMiddleware(true, true, true);
 
-if (!empty($_ENV['DATABASE_URL'])) {
-    $url = parse_url($_ENV['DATABASE_URL']);
+//export DATABASE_URL=pgsql://a1111:@127.0.0.1:5432/hexlet_db_dev
 
+$databaseUrl = getenv('DATABASE_URL');
+
+if ($databaseUrl === false || $databaseUrl === '') {
+    throw new RuntimeException('DATABASE_URL is not defined');
+}
+
+$url = parse_url($databaseUrl);
+
+if ($url === false) {
+    throw new RuntimeException('DATABASE_URL has invalid format');
+}
     $host = $url['host'];
     $port = $url['port'];
     $dbName = ltrim($url['path'], '/');
@@ -39,12 +52,8 @@ if (!empty($_ENV['DATABASE_URL'])) {
     $password = $url['pass'];
 
     $dsn = "pgsql:host=$host;port=$port;dbname=$dbName";
-} else {
-    // ЛОКАЛЬНАЯ БАЗА
-    $dsn = 'pgsql:host=127.0.0.1;port=5432;dbname=hexlet_db_dev;';
-    $user = 'a1111';
-    $password = '';
-}
+
+
 
 $dbh = new PDO($dsn, $user, $password);
 
@@ -100,16 +109,10 @@ $app->post('/urls', function (Request $request, Response $response) use ($dbh) {
 
     //Здесь будет проверка на уникальность url с помощью класса UrlHelper
     if ($urlName != null) {
-        $urlChecker = new UrlHelper($dbh);
-        $findIdByUrl = $urlChecker->findIdByUrl($urlName);
+        $existingUrlId  = new UrlHelper($dbh);
+        $findIdByUrl = $existingUrlId ->findIdByUrl($urlName);
         if ($findIdByUrl !== null) {
             $flash->addMessage('succes', 'Страница уже существует');
-            //вобщем в этом месте думаю createIfNotExists должна возвращать id той строки которая уже добавлена и туда надо возвращаться
-            //$stmt = $dbh->prepare("INSERT INTO urls (name) VALUES (:name)");
-            //$stmt->bindValue(':name', $urlName, PDO::PARAM_STR);
-            //$stmt->execute();
-
-            //$id = $dbh->lastInsertId();
             return $response
                 ->withHeader('Location', "/urls/{$findIdByUrl}")
                 ->withStatus(302);
@@ -134,6 +137,7 @@ $app->post('/urls', function (Request $request, Response $response) use ($dbh) {
 $app->get('/urls/{id}', function (Request $request, Response $response, array $args) use ($dbh) {
     $renderer = new PhpRenderer(__DIR__ . '/../templates');
     $flash = $this->get('flash');
+    $errors = $flash->getMessage('error');
     $succes = $flash->getMessage('succes'); // массив сообщений
     $id = $args['id'];
     $stmt = $dbh->prepare("SELECT * FROM urls WHERE id = :id");
@@ -152,6 +156,7 @@ $app->get('/urls/{id}', function (Request $request, Response $response, array $a
         'name' => $url['name'],
         'created_at' => $url['created_at'],
         'succes' => $succes,
+        'errors' => $errors,
         'checks' => $checks,
         ];
     return $renderer->render($response, 'url.phtml', $viewData);
@@ -163,12 +168,18 @@ $app->get('/urls', function (Request $request, Response $response) use ($dbh) {
         SELECT
             urls.id,
             urls.name,
-            MAX(url_checks.created_at) AS last_check_at
+            uc.status_code,
+            uc.created_at AS last_check_at
         FROM urls
-        LEFT JOIN url_checks
-            ON urls.id = url_checks.url_id
-        GROUP BY urls.id, urls.name
-        ORDER BY urls.id DESC
+        LEFT JOIN url_checks uc
+            ON uc.id = (
+                SELECT id
+                FROM url_checks
+                WHERE url_id = urls.id
+                ORDER BY created_at DESC
+                LIMIT 1
+            )
+        ORDER BY urls.id ASC;
     ");
     $stmt->execute();
     $url = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -181,15 +192,24 @@ $app->get('/urls', function (Request $request, Response $response) use ($dbh) {
 
 $app->post('/urls/{url_id}/checks', function (Request $request, Response $response, array $args) use ($dbh) {
 
-    $renderer = new PhpRenderer(__DIR__ . '/../templates');
+    $urlCheck = new urlChecker($dbh);
+
     $flash = $this->get('flash');
-    $succes = $flash->getMessage('succes'); // массив сообщений
     $url_id = $args['url_id'];
-    $stmt = $dbh->prepare("INSERT INTO url_checks (url_id, created_at) VALUES (:url_id, NOW()::timestamp(0))");
+    $statusCode = $urlCheck->findStatusCode($url_id);
+    if ($statusCode === null) {
+        $flash->addMessage('error', 'Произошла ошибка при проверке, не удалось подключиться');
+        return $response
+            ->withHeader('Location', "/urls/{$url_id}")
+            ->withStatus(302);
+    }
+
+    $stmt = $dbh->prepare("INSERT INTO url_checks (url_id, status_code, created_at) VALUES (:url_id, :status_code, NOW()::timestamp(0))");
     $stmt->bindValue(':url_id', $url_id, PDO::PARAM_STR);
+    $stmt->bindValue(':status_code', $statusCode, PDO::PARAM_INT);
     $stmt->execute();
 
-
+    $flash->addMessage('succes', 'Страница успешно проверена');
     return $response
         ->withHeader('Location', "/urls/{$url_id}")
         ->withStatus(302);
