@@ -2,6 +2,7 @@
 session_start();
 require __DIR__ . '/../vendor/autoload.php';
 
+use Dotenv\Dotenv;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Factory\AppFactory;
@@ -34,7 +35,10 @@ $errorMiddleware = $app->addErrorMiddleware(true, true, true);
 
 //export DATABASE_URL=pgsql://a1111:@127.0.0.1:5432/hexlet_db_dev
 
-$databaseUrl = getenv('DATABASE_URL');
+$dotenv = Dotenv::createImmutable(dirname(__DIR__));
+$dotenv->safeLoad();
+
+$databaseUrl = $_ENV['DATABASE_URL'];
 
 if ($databaseUrl === false || $databaseUrl === '') {
     throw new RuntimeException('DATABASE_URL is not defined');
@@ -54,7 +58,7 @@ if ($url === false) {
     $dsn = "pgsql:host=$host;port=$port;dbname=$dbName";
 
 
-
+//посмотреть статью как сделать класс отдельный для подключения к БД
 $dbh = new PDO($dsn, $user, $password);
 
 $initFilePath = implode('/', [dirname(__DIR__), 'database.sql']);
@@ -196,7 +200,12 @@ $app->post('/urls/{url_id}/checks', function (Request $request, Response $respon
 
     $flash = $this->get('flash');
     $url_id = $args['url_id'];
-    $statusCode = $urlCheck->findStatusCode($url_id);
+    $data = $urlCheck->findStatusCode($url_id);
+    $statusCode = $data['status_code'];
+    $h1 = $data['h1'];
+    $title = $data['title'];
+    $description = $data['description'];
+    //$h1Test = $urlCheck->getH1($url_id);
     if ($statusCode === null) {
         $flash->addMessage('error', 'Произошла ошибка при проверке, не удалось подключиться');
         return $response
@@ -204,9 +213,13 @@ $app->post('/urls/{url_id}/checks', function (Request $request, Response $respon
             ->withStatus(302);
     }
 
-    $stmt = $dbh->prepare("INSERT INTO url_checks (url_id, status_code, created_at) VALUES (:url_id, :status_code, NOW()::timestamp(0))");
-    $stmt->bindValue(':url_id', $url_id, PDO::PARAM_STR);
+    $stmt = $dbh->prepare("INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
+                                    VALUES (:url_id, :status_code, :h1, :title, :description, NOW()::timestamp(0))");
+    $stmt->bindValue(':url_id', $url_id, PDO::PARAM_INT);
     $stmt->bindValue(':status_code', $statusCode, PDO::PARAM_INT);
+    $stmt->bindValue(':h1', $h1, PDO::PARAM_STR);
+    $stmt->bindValue(':title', $title, PDO::PARAM_STR);
+    $stmt->bindValue(':description', $description, PDO::PARAM_STR);
     $stmt->execute();
 
     $flash->addMessage('succes', 'Страница успешно проверена');
