@@ -2,8 +2,6 @@
 
 namespace App;
 
-namespace App;
-
 use PDO;
 use GuzzleHttp\Client;
 use Symfony\Component\DomCrawler\Crawler;
@@ -17,28 +15,38 @@ class UrlChecker
         $this->dbh = $dbh;
     }
 
-    public function findStatusCode($url_id) //переименовать в getData например
+    public function getData(string $siteName) //переименовать в getData например
     {
-        $stmt = $this->dbh->prepare(
-            "SELECT name FROM urls WHERE id = :url_id"
-        );
-        $stmt->bindValue(':url_id', $url_id, PDO::PARAM_STR);
-        $stmt->execute();
+//        $stmt = $this->dbh->prepare(
+//            "SELECT name FROM urls WHERE id = :url_id"
+//        );
+//        $stmt->bindValue(':url_id', $url_id, PDO::PARAM_INT);
+//        $stmt->execute();
+//
+//        $row = $stmt->fetch(PDO::FETCH_ASSOC); // это можно избмежать если сделать так $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION); https://ru.hexlet.io/blog/posts/php-modul-pdo
+//        if($row === false) {
+//            return null;
+//        }
 
-        $row = $stmt->fetch(PDO::FETCH_ASSOC); // это можно избмежать если сделать так $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION); https://ru.hexlet.io/blog/posts/php-modul-pdo
         try {
             $client = new Client([
                 'timeout' => 5,
                 'http_errors' => false
             ]);
-            $res = $client->request('GET', $row['name']);
+            $res = $client->request('GET', $siteName);
             $statusCode = $res->getStatusCode();
+
+            if ($statusCode === 404) {
+                throw new \App\Exception\UrlNotFoundException('URL returned 404');
+            }
             $data['status_code'] = $statusCode;
 
-            //return $statusCode;
-        } catch (\Throwable $e) {
+        } catch (\App\Exception\UrlNotFoundException $e) {
             // Сайт недоступен (DNS, timeout и т.п.)
-            return null;
+            throw $e;
+        } catch (\Throwable $e) {
+            // Все остальные ошибки (DNS, timeout, сеть, SSL и т.д.) - это 500
+            throw new \Exception('Failed to check URL: ' . $e->getMessage(), 500);
         }
         $content = $res->getBody()->getContents();
 
