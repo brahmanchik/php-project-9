@@ -1,62 +1,62 @@
 <?php
 
-namespace PostgreSQLTutorial;
+namespace App;
 
-/**
- * Создание класса Connection
- */
-final class Connection
+use PDO;
+use Dotenv\Dotenv;
+
+class Connection
 {
-    /**
-     * Connection
-     * тип @var
-     */
-    private static ?Connection $conn = null;
+    private static ?PDO $connection = null;
 
     /**
-     * Подключение к базе данных и возврат экземпляра объекта \PDO
-     * @return \PDO
-     * @throws \Exception
+     * Получить подключение к базе данных
+     * @return PDO
+     * @throws \RuntimeException
      */
-    public function connect()
+    public static function getConnection(): PDO
     {
-        // чтение параметров в файле конфигурации ini
-        $params = parse_ini_file('database.ini');
-        if ($params === false) {
-            throw new \Exception("Error reading database configuration file");
+        if (self::$connection === null) {
+            self::$connection = self::createConnection();
         }
 
-        // подключение к базе данных postgresql
-        $conStr = sprintf(
-            "pgsql:host=%s;port=%d;dbname=%s;user=%s;password=%s",
-            $params['host'],
-            $params['port'],
-            $params['database'],
-            $params['user'],
-            $params['password']
-        );
+        return self::$connection;
+    }
 
-        $pdo = new \PDO($conStr);
-        $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+    /**
+     * Создать новое подключение к базе данных
+     * @return PDO
+     * @throws \RuntimeException
+     */
+    private static function createConnection(): PDO
+    {
+        // Загружаем .env файл
+        $dotenv = Dotenv::createImmutable(dirname(__DIR__));
+        $dotenv->safeLoad();
+
+        $databaseUrl = $_ENV['DATABASE_URL'] ?? '';
+
+        if ($databaseUrl === '') {
+            throw new \RuntimeException('DATABASE_URL is not defined');
+        }
+
+        $url = parse_url($databaseUrl);
+
+        if ($url === false) {
+            throw new \RuntimeException('DATABASE_URL has invalid format');
+        }
+
+        $host = $url['host'] ?? 'localhost';
+        $port = $url['port'] ?? 5432;
+        $dbName = ltrim($url['path'] ?? '', '/');
+        $user = $url['user'] ?? '';
+        $password = $url['pass'] ?? '';
+
+        $dsn = "pgsql:host=$host;port=$port;dbname=$dbName";
+
+        $pdo = new PDO($dsn, $user, $password);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         return $pdo;
-    }
-
-    /**
-     * возврат экземпляра объекта Connection
-     * тип @return
-     */
-    public static function get()
-    {
-        if (null === static::$conn) {
-            static::$conn = new self();
-        }
-
-        return static::$conn;
-    }
-
-    protected function __construct()
-    {
-
     }
 }
