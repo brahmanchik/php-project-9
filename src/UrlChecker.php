@@ -40,7 +40,6 @@ class UrlChecker
                 throw new \App\Exception\UrlNotFoundException('URL returned 404');
             }
             $data['status_code'] = $statusCode;
-
         } catch (\App\Exception\UrlNotFoundException $e) {
             // Сайт недоступен (DNS, timeout и т.п.)
             throw $e;

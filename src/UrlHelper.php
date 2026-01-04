@@ -1,7 +1,9 @@
 <?php
+
 namespace App;
 
 use PDO;
+
 class UrlHelper
 {
     private $dbh;
@@ -11,7 +13,8 @@ class UrlHelper
         $this->dbh = $dbh;
     }
 
-    public static function normalize(string $url): string {
+    public static function normalize(string $url): string
+    {
         $parts = parse_url($url);
         $scheme = $parts['scheme'] ?? 'http';
         $host   = $parts['host'] ?? '';
@@ -38,4 +41,3 @@ class UrlHelper
         return (int) $row['id']; // URL уже есть → возвращаем id
     }
 }
-
