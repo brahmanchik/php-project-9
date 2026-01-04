@@ -3,7 +3,6 @@
 namespace App;
 
 use PDO;
-use Slim\Exception\HttpNotFoundException;
 use App\Exception\UrlNotFoundException;
 
 class UrlRepository
@@ -23,13 +22,9 @@ class UrlRepository
         $stmt->bindValue(':id', $id, PDO::PARAM_INT);
         $stmt->execute();
 
-        $row = $stmt->fetch(PDO::FETCH_ASSOC); // это можно избмежать если сделать так $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION); https://ru.hexlet.io/blog/posts/php-modul-pdo
-        //if($row === false) {
-        //    return null;
-        //}
-
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($row === false) {
-            throw new UrlNotFoundException('URL not found'); // Вместо \Exception
+            throw new UrlNotFoundException('URL not found');
         }
         return $row;
     }

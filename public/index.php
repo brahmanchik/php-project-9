@@ -1,4 +1,5 @@
 <?php
+
 session_start();
 require __DIR__ . '/../vendor/autoload.php';
 
@@ -30,13 +31,6 @@ $container->set(PhpRenderer::class, function () {
 });
 
 // Подключение к базе данных
-
-/*
-$dbh = Connection::getConnection();
-$container->set(PDO::class, function () use ($dbh) {
-    return $dbh;
-});
- */
 $container->set(PDO::class, function () {
     return Connection::getConnection();
 });
@@ -47,14 +41,14 @@ $router = $app->getRouteCollector()->getRouteParser();
 //обработка ошибок
 // Define Custom Error Handler
 $customErrorHandler = function (
-    Request   $request,
+    Request $request,
     Throwable $exception,
-    bool      $displayErrorDetails,
-    bool      $logErrors,
-    bool      $logErrorDetails
+    bool $displayErrorDetails,
+    bool $logErrors,
+    bool $logErrorDetails
 ) use ($app) {
-    $renderer = $app->getContainer()->get(PhpRenderer::class); // Вместо $this->get()
-//if с обработкой ошибок
+    $renderer = $app->getContainer()->get(PhpRenderer::class);
+
     // 404 - ресурс не найден в БД
     if ($exception instanceof \App\Exception\UrlNotFoundException) {
         $response = $app->getResponseFactory()->createResponse(404);
@@ -82,7 +76,7 @@ $container->get(PDO::class)->exec($initSql);
 
 // Define app routes
 $app->get('/', function (Request $request, Response $response) {
-    $renderer = $this->get(PhpRenderer::class,);
+    $renderer = $this->get(PhpRenderer::class);
     $flash = $this->get('flash');
     $errors = $flash->getMessage('error'); // массив сообщений
     $viewData = [
@@ -95,7 +89,7 @@ $app->post('/urls', function (Request $request, Response $response) {
     $flash = $this->get('flash');
     $data = $request->getParsedBody();
     $urlName = $data['url']['name'] ?? null;
-    //ниже будет валидация
+
     // Создаём Translator (заглушка)
     $translator = new Translator(new ArrayLoader(), 'en');
 
@@ -110,7 +104,6 @@ $app->post('/urls', function (Request $request, Response $response) {
     $validator = $factory->make($data, $rules);
 
     if ($validator->fails() || !filter_var($urlName, FILTER_VALIDATE_URL)) {
-
         $flash->addMessage('error', 'Неверный URL');
         $redirectUrl = RouteContext::fromRequest($request)
             ->getRouteParser()
@@ -141,22 +134,14 @@ $app->post('/urls', function (Request $request, Response $response) {
         return $response
             ->withHeader('Location', "/urls/{$id}")
             ->withStatus(302);
-    //выше валидация
 });
 
-//Реализуйте вывод конкретного введенного URL на отдельной странице urls/{id}
-//запихнуть в DI контейнер подключение к БД
 $app->get('/urls/{id:[0-9]+}', function (Request $request, Response $response, array $args) {
-    $renderer = $this->get(PhpRenderer::class,);
+    $renderer = $this->get(PhpRenderer::class);
     $flash = $this->get('flash');
     $errors = $flash->getMessage('error');
-    $succes = $flash->getMessage('succes'); // массив сообщений
+    $succes = $flash->getMessage('succes');
     $id = $args['id'];
-    /*$stmt = $dbh->prepare("SELECT * FROM urls WHERE id = :id");
-    $stmt->bindValue(':id', $id, PDO::PARAM_STR);
-    $stmt->execute();
-    $url = $stmt->fetch(PDO::FETCH_ASSOC);*/
-    // Валидация: id должен быть числом и больше 0
     if (!ctype_digit((string)$id) || (int)$id <= 0) {
         throw new \App\Exception\UrlNotFoundException('Invalid ID');
     }
@@ -166,9 +151,7 @@ $app->get('/urls/{id:[0-9]+}', function (Request $request, Response $response, a
     $urlData = $urlRepository->getById($id);
 
     //редирект на 404 в случае не существующей страницы
-    if($urlData === false) {
-        //throw new HttpNotFoundException($request);
-        //throw new Exception("тут я хочу выбросить исключение либо 404 либо  500 как лучше сделать");
+    if ($urlData === false) {
         return $renderer->render($response, '404.phtml')->withStatus(404);
     }
     $dbh = $this->get(PDO::class);
@@ -190,7 +173,7 @@ $app->get('/urls/{id:[0-9]+}', function (Request $request, Response $response, a
 });
 
 $app->get('/urls', function (Request $request, Response $response) {
-    $renderer = $this->get(PhpRenderer::class,);
+    $renderer = $this->get(PhpRenderer::class);
     $dbh = $this->get(PDO::class);
     $stmt = $dbh->prepare("
         SELECT
@@ -212,21 +195,18 @@ $app->get('/urls', function (Request $request, Response $response) {
     $stmt->execute();
     $url = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $viewData = [
-        'urls' => $url, // передаём весь массив
+        'urls' => $url,
     ];
     return $renderer->render($response, 'urls.phtml', $viewData);
 });
 
 $app->post('/urls/{url_id:[0-9]+}/checks', function (Request $request, Response $response, array $args) {
-    $renderer = $this->get(PhpRenderer::class,);
+    $renderer = $this->get(PhpRenderer::class);
     $id = $args['url_id'];
     $urlCheck = $this->get(UrlChecker::class);
     $urlRepository = $this->get(UrlRepository::class);
     $urlData = $urlRepository->getById($id);
-    //сделать проверку в отедлльном классе нашлись ли записи в бд по значению id или нет, если нет вернуть null
-    /*if ($urlData === null) {
-        throw new HttpNotFoundException($request);
-    }   */
+
     if ($urlData === null) {
         return $renderer->render($response, '404.phtml')->withStatus(404);
     }
@@ -258,8 +238,6 @@ $app->post('/urls/{url_id:[0-9]+}/checks', function (Request $request, Response 
     return $response
         ->withHeader('Location', "/urls/{$id}")
         ->withStatus(302);
-    //return $renderer->render($response, 'url.phtml', $viewData);
 });
 
-// Run app
 $app->run();
