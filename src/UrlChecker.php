@@ -49,12 +49,20 @@ class UrlChecker
 
         $crawler = new Crawler($content);
 
-        $data['h1'] = optional($crawler->filter('h1')->getNode(0))?->textContent;
-        $data['title'] = optional($crawler->filter('title')->getNode(0))?->textContent;
-        $data['description'] = optional(
-            $crawler->filter('meta[name="description"]')->getNode(0)
-        )?->getAttribute('content');
+        $data['h1'] = $this->truncate(
+    optional($crawler->filter('h1')->getNode(0))?->textContent
+);
 
+        $data['title'] = $this->truncate(
+            optional($crawler->filter('title')->getNode(0))?->textContent
+        );
+        
+        $data['description'] = $this->truncate(
+            optional(
+                $crawler->filter('meta[name="description"]')->getNode(0)
+            )?->getAttribute('content')
+        );
+        
         return $data;
     }
 }
