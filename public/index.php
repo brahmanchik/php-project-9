@@ -210,20 +210,25 @@ $app->post('/urls/{url_id:[0-9]+}/checks', function (Request $request, Response 
     if ($urlData === null) {
         return $renderer->render($response, '404.phtml')->withStatus(404);
     }
-    $data = $urlCheck->getData($urlData['name']);
-
     $flash = $this->get('flash');
-    $statusCode = $data['status_code'];
-    $h1 = $data['h1'];
-    $title = $data['title'];
-    $description = $data['description'];
-    //$h1Test = $urlCheck->getH1($url_id);
-    if ($statusCode === null) {
-        $flash->addMessage('error', 'Произошла ошибка при проверке, не удалось подключиться');
+
+    try {
+        $data = $urlCheck->getData($urlData['name']);
+    } catch (Throwable $exception) {
+        $flash->addMessage(
+            'error',
+            'Произошла ошибка при проверке, не удалось подключиться'
+        );
+    
         return $response
             ->withHeader('Location', "/urls/{$id}")
             ->withStatus(302);
     }
+
+$statusCode = $data['status_code'];
+$h1 = $data['h1'];
+$title = $data['title'];
+$description = $data['description'];
     $dbh = $this->get(PDO::class);
     $stmt = $dbh->prepare("INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
                                     VALUES (:url_id, :status_code, :h1, :title, :description, NOW()::timestamp(0))");
