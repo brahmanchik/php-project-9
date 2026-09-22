@@ -104,13 +104,13 @@ $app->post('/urls', function (Request $request, Response $response) {
     $validator = $factory->make($data, $rules);
 
     if ($validator->fails() || !filter_var($urlName, FILTER_VALIDATE_URL)) {
-        $flash->addMessage('error', 'Неверный URL');
-        $redirectUrl = RouteContext::fromRequest($request)
-            ->getRouteParser()
-            ->urlFor('index');
-        return $response
-            ->withHeader('Location', $redirectUrl)
-            ->withStatus(302);
+        $renderer = $this->get(PhpRenderer::class);
+    
+        return $renderer->render(
+            $response->withStatus(422),
+            'index.phtml',
+            ['errors' => ['Некорректный URL']]
+        );
     }
     $urlName = UrlHelper::normalize($urlName);
     //Здесь будет проверка на уникальность url с помощью класса UrlHelper
