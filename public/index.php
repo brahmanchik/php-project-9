@@ -105,7 +105,7 @@ $app->post('/urls', function (Request $request, Response $response) {
 
     if ($validator->fails() || !filter_var($urlName, FILTER_VALIDATE_URL)) {
         $renderer = $this->get(PhpRenderer::class);
-    
+
         return $renderer->render(
             $response->withStatus(422),
             'index.phtml',
@@ -219,16 +219,16 @@ $app->post('/urls/{url_id:[0-9]+}/checks', function (Request $request, Response 
             'error',
             'Произошла ошибка при проверке, не удалось подключиться'
         );
-    
+
         return $response
             ->withHeader('Location', "/urls/{$id}")
             ->withStatus(302);
     }
 
-$statusCode = $data['status_code'];
-$h1 = $data['h1'];
-$title = $data['title'];
-$description = $data['description'];
+    $statusCode = $data['status_code'];
+    $h1 = $data['h1'];
+    $title = $data['title'];
+    $description = $data['description'];
     $dbh = $this->get(PDO::class);
     $stmt = $dbh->prepare("INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
                                     VALUES (:url_id, :status_code, :h1, :title, :description, NOW()::timestamp(0))");

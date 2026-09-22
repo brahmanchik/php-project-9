@@ -41,27 +41,28 @@ class UrlChecker
         $crawler = new Crawler($content);
 
         $data['h1'] = $this->truncate(
-    optional($crawler->filter('h1')->getNode(0))?->textContent
-);
+            optional($crawler->filter('h1')->getNode(0))?->textContent
+        );
 
         $data['title'] = $this->truncate(
             optional($crawler->filter('title')->getNode(0))?->textContent
         );
-        
+
         $data['description'] = $this->truncate(
             optional(
                 $crawler->filter('meta[name="description"]')->getNode(0)
             )?->getAttribute('content')
         );
-        
+
         return $data;
     }
+
     private function truncate(?string $value): ?string
     {
         if ($value === null || mb_strlen($value) <= 200) {
             return $value;
         }
-    
+
         return mb_substr($value, 0, 200) . '...';
     }
 }
