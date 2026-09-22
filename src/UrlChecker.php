@@ -25,8 +25,10 @@ class UrlChecker
             $res = $client->request('GET', $siteName);
             $statusCode = $res->getStatusCode();
 
-            if ($statusCode === 404) {
-                throw new \App\Exception\UrlNotFoundException('URL returned 404');
+            if ($statusCode >= 400) {
+                throw new \App\Exception\UrlNotFoundException(
+                    'URL returned an unsuccessful status code'
+                );
             }
             $data['status_code'] = $statusCode;
         } catch (\App\Exception\UrlNotFoundException $e) {
