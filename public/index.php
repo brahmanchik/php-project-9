@@ -190,7 +190,7 @@ $app->get('/urls', function (Request $request, Response $response) {
                 ORDER BY created_at DESC
                 LIMIT 1
             )
-        ORDER BY urls.id ASC;
+        ORDER BY urls.id DESC;
     ");
     $stmt->execute();
     $url = $stmt->fetchAll(PDO::FETCH_ASSOC);
