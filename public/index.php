@@ -112,7 +112,7 @@ $app->post('/urls', function (Request $request, Response $response) {
             ->withHeader('Location', $redirectUrl)
             ->withStatus(302);
     }
-
+    $urlName = UrlHelper::normalize($urlName);
     //Здесь будет проверка на уникальность url с помощью класса UrlHelper
     if ($urlName != null) {
         $existingUrlId  = $this->get(UrlHelper::class);
