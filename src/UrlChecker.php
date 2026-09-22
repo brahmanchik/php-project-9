@@ -15,6 +15,15 @@ class UrlChecker
         $this->dbh = $dbh;
     }
 
+    private function truncate(?string $value): ?string
+    {
+        if ($value === null || mb_strlen($value) <= 200) {
+            return $value;
+        }
+    
+        return mb_substr($value, 0, 200) . '...';
+    }
+
     public function getData(string $siteName) //переименовать в getData например
     {
         try {
