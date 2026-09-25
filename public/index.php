@@ -3,25 +3,21 @@
 session_start();
 require __DIR__ . '/../vendor/autoload.php';
 
+use App\Connection;
+use App\Exception\UrlNotFoundException;
+use App\UrlChecker;
+use App\UrlHelper;
 use App\UrlRepository;
-use Dotenv\Dotenv;
+use DI\Container;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\Exception\HttpNotFoundException;
 use Slim\Factory\AppFactory;
 use Slim\Flash\Messages;
-use Slim\Routing\RouteContext;
 use Slim\Views\PhpRenderer;
+use Valitron\Validator;
 
-use Illuminate\Validation\Factory;
-use Illuminate\Translation\ArrayLoader;
-use Illuminate\Translation\Translator;
-use App\Connection;
-
-use App\UrlHelper;
-use App\UrlChecker;
-$container = new \DI\Container();
-
-
+$container = new Container();
 $container->set('flash', function () {
     return new Messages();
 });
@@ -35,8 +31,25 @@ $container->set(PDO::class, function () {
     return Connection::getConnection();
 });
 
+$container->set(Validator::class, function () {
+    $validator = new Validator();
+
+    $validator
+        ->rule('required', 'url')
+        ->message('URL не должен быть пустым');
+
+    $validator
+        ->rule('url', 'url')
+        ->message('Некорректный URL');
+
+    $validator
+        ->rule('lengthMax', 'url', 255)
+        ->message('URL не должен быть длиннее 255 символов');
+
+    return $validator;
+});
+
 $app = AppFactory::createFromContainer($container);
-$router = $app->getRouteCollector()->getRouteParser();
 
 //обработка ошибок
 // Define Custom Error Handler
@@ -50,12 +63,12 @@ $customErrorHandler = function (
     $renderer = $app->getContainer()->get(PhpRenderer::class);
 
     // 404 - ресурс не найден в БД
-    if ($exception instanceof \App\Exception\UrlNotFoundException) {
+    if ($exception instanceof UrlNotFoundException)  {
         $response = $app->getResponseFactory()->createResponse(404);
         return $renderer->render($response, '404.phtml');
     }
     // 404 - роут не найден (Slim выбрасывает HttpNotFoundException)
-    if ($exception instanceof \Slim\Exception\HttpNotFoundException) {
+    if ($exception instanceof HttpNotFoundException) {
         $response = $app->getResponseFactory()->createResponse(404);
         return $renderer->render($response, '404.phtml');
     }
@@ -68,11 +81,6 @@ $app->addRoutingMiddleware();
 // Add Error Middleware
 $errorMiddleware = $app->addErrorMiddleware(true, true, true);
 $errorMiddleware->setDefaultErrorHandler($customErrorHandler);
-
-
-$initFilePath = implode('/', [dirname(__DIR__), 'database.sql']);
-$initSql = file_get_contents($initFilePath);
-$container->get(PDO::class)->exec($initSql);
 
 // Define app routes
 $app->get('/', function (Request $request, Response $response) {
@@ -87,45 +95,41 @@ $app->get('/', function (Request $request, Response $response) {
 
 $app->post('/urls', function (Request $request, Response $response) {
     $flash = $this->get('flash');
-    $data = $request->getParsedBody();
-    $urlName = $data['url']['name'] ?? null;
 
-    // Создаём Translator (заглушка)
-    $translator = new Translator(new ArrayLoader(), 'en');
+    $body = $request->getParsedBody();
+    $urlName = $body['url']['name'] ?? '';
 
-    $factory = new Factory($translator);
-// Данные для проверки
-    $data = [
-        'url' => $urlName
-    ];
-    $rules = [
-        'url' => 'required|url|max:255'
-    ];
-    $validator = $factory->make($data, $rules);
+    $validator = $this
+        ->get(Validator::class)
+        ->withData(['url' => $urlName]);
 
-    if ($validator->fails() || !filter_var($urlName, FILTER_VALIDATE_URL)) {
+    if (!$validator->validate()) {
         $renderer = $this->get(PhpRenderer::class);
+
+        $errors = $validator->errors();
+        $urlErrors = $errors['url'] ?? ['Некорректный URL'];
 
         return $renderer->render(
             $response->withStatus(422),
             'index.phtml',
-            ['errors' => ['Некорректный URL']]
+            ['errors' => $urlErrors]
         );
     }
+
     $urlName = UrlHelper::normalize($urlName);
-    //Здесь будет проверка на уникальность url с помощью класса UrlHelper
-    if ($urlName != null) {
-        $existingUrlId  = $this->get(UrlHelper::class);
-        $findIdByUrl = $existingUrlId ->findIdByUrl($urlName);
-        if ($findIdByUrl !== null) {
-            $flash->addMessage('succes', 'Страница уже существует');
-            return $response
-                ->withHeader('Location', "/urls/{$findIdByUrl}")
-                ->withStatus(302);
-        }
+
+    $urlHelper = $this->get(UrlHelper::class);
+    $existingUrlId = $urlHelper->findIdByUrl($urlName);
+
+    if ($existingUrlId !== null) {
+        $flash->addMessage('success', 'Страница уже существует');
+
+        return $response
+            ->withHeader('Location', "/urls/{$existingUrlId}")
+            ->withStatus(302);
     }
 
-        $flash->addMessage('succes', 'Страница успешно добавлена');
+        $flash->addMessage('success', 'Страница успешно добавлена');
         $stmt = $this->get(PDO::class)->prepare("INSERT INTO urls (name) VALUES (:name)");
         $stmt->bindValue(':name', $urlName, PDO::PARAM_STR);
         $stmt->execute();
@@ -140,20 +144,11 @@ $app->get('/urls/{id:[0-9]+}', function (Request $request, Response $response, a
     $renderer = $this->get(PhpRenderer::class);
     $flash = $this->get('flash');
     $errors = $flash->getMessage('error');
-    $succes = $flash->getMessage('succes');
-    $id = $args['id'];
-    if (!ctype_digit((string)$id) || (int)$id <= 0) {
-        throw new \App\Exception\UrlNotFoundException('Invalid ID');
-    }
-
-    $id = (int)$id;
+    $success = $flash->getMessage('success');
+    $id = (int) $args['id'];
     $urlRepository = $this->get(UrlRepository::class);
     $urlData = $urlRepository->getById($id);
 
-    //редирект на 404 в случае не существующей страницы
-    if ($urlData === false) {
-        return $renderer->render($response, '404.phtml')->withStatus(404);
-    }
     $dbh = $this->get(PDO::class);
     $stmt = $dbh->prepare("SELECT * FROM url_checks WHERE url_id = :id");
     $stmt->bindValue(':id', $id);
@@ -165,7 +160,7 @@ $app->get('/urls/{id:[0-9]+}', function (Request $request, Response $response, a
         'id' => $urlData['id'],
         'name' => $urlData['name'],
         'created_at' => $urlData['created_at'],
-        'succes' => $succes,
+        'success' => $success,
         'errors' => $errors,
         'checks' => $checks,
         ];
@@ -175,41 +170,62 @@ $app->get('/urls/{id:[0-9]+}', function (Request $request, Response $response, a
 $app->get('/urls', function (Request $request, Response $response) {
     $renderer = $this->get(PhpRenderer::class);
     $dbh = $this->get(PDO::class);
-    $stmt = $dbh->prepare("
-        SELECT
-            urls.id,
-            urls.name,
-            uc.status_code,
-            uc.created_at AS last_check_at
+
+    // Первый простой запрос: получаем все URL
+    $urlsStatement = $dbh->query(
+        "SELECT id, name
         FROM urls
-        LEFT JOIN url_checks uc
-            ON uc.id = (
-                SELECT id
-                FROM url_checks
-                WHERE url_id = urls.id
-                ORDER BY created_at DESC
-                LIMIT 1
-            )
-        ORDER BY urls.id DESC;
-    ");
-    $stmt->execute();
-    $url = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $viewData = [
-        'urls' => $url,
-    ];
-    return $renderer->render($response, 'urls.phtml', $viewData);
+        ORDER BY id DESC"
+    );
+
+    $urls = $urlsStatement->fetchAll(PDO::FETCH_ASSOC);
+
+    // Второй запрос: получаем только последнюю проверку каждого URL
+    $checksStatement = $dbh->query(
+        "SELECT DISTINCT ON (url_id)
+            url_id,
+            status_code,
+            created_at AS last_check_at
+        FROM url_checks
+        ORDER BY url_id, created_at DESC, id DESC"
+    );
+
+    $latestChecks = $checksStatement->fetchAll(PDO::FETCH_ASSOC);
+
+    // Создаём массив, где ключ — ID сайта
+    $checksByUrlId = [];
+
+    foreach ($latestChecks as $check) {
+        $urlId = (int) $check['url_id'];
+        $checksByUrlId[$urlId] = $check;
+    }
+
+    // Соединяем URL с последними проверками
+    $urlsWithChecks = [];
+
+    foreach ($urls as $url) {
+        $urlId = (int) $url['id'];
+        $latestCheck = $checksByUrlId[$urlId] ?? null;
+
+        $url['status_code'] = $latestCheck['status_code'] ?? null;
+        $url['last_check_at'] = $latestCheck['last_check_at'] ?? null;
+
+        $urlsWithChecks[] = $url;
+    }
+
+    return $renderer->render(
+        $response,
+        'urls.phtml',
+        ['urls' => $urlsWithChecks]
+    );
 });
 
 $app->post('/urls/{url_id:[0-9]+}/checks', function (Request $request, Response $response, array $args) {
-    $renderer = $this->get(PhpRenderer::class);
-    $id = $args['url_id'];
+    $id = (int) $args['url_id'];
     $urlCheck = $this->get(UrlChecker::class);
     $urlRepository = $this->get(UrlRepository::class);
     $urlData = $urlRepository->getById($id);
 
-    if ($urlData === null) {
-        return $renderer->render($response, '404.phtml')->withStatus(404);
-    }
     $flash = $this->get('flash');
 
     try {
@@ -239,7 +255,7 @@ $app->post('/urls/{url_id:[0-9]+}/checks', function (Request $request, Response 
     $stmt->bindValue(':description', $description, PDO::PARAM_STR);
     $stmt->execute();
 
-    $flash->addMessage('succes', 'Страница успешно проверена');
+    $flash->addMessage('success', 'Страница успешно проверена');
     return $response
         ->withHeader('Location', "/urls/{$id}")
         ->withStatus(302);

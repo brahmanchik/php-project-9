@@ -22,7 +22,9 @@
         "imangazaliev/didom": "^2.0",
         "symfony/dom-crawler": "^7.4",
         "vlucas/phpdotenv": "^5.6",
-        "ext-pdo": "*"
+        "ext-pdo": "*",
+        "vlucas/valitron": "^1.4",
+        "symfony/css-selector": "^7.4"
     },
     "require-dev": {
         "squizlabs/php_codesniffer": "^4.0"

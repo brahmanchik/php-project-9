@@ -2,41 +2,37 @@
 
 namespace App;
 
-use PDO;
+use App\Exception\UrlNotFoundException;
+use Exception;
 use GuzzleHttp\Client;
 use Symfony\Component\DomCrawler\Crawler;
+use Throwable;
 
 class UrlChecker
 {
-    private $dbh;
-
-    public function __construct(PDO $dbh)
-    {
-        $this->dbh = $dbh;
-    }
-
     public function getData(string $siteName) //переименовать в getData например
     {
         try {
             $client = new Client([
-                'timeout' => 5,
-                'http_errors' => false
+                'timeout' => 10,
+                'connect_timeout' => 5,
+                'http_errors' => false,
             ]);
             $res = $client->request('GET', $siteName);
             $statusCode = $res->getStatusCode();
 
             if ($statusCode >= 400) {
-                throw new \App\Exception\UrlNotFoundException(
+                throw new UrlNotFoundException(
                     'URL returned an unsuccessful status code'
                 );
             }
             $data['status_code'] = $statusCode;
-        } catch (\App\Exception\UrlNotFoundException $e) {
+        } catch (UrlNotFoundException $e) {
             // Сайт недоступен (DNS, timeout и т.п.)
             throw $e;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // Все остальные ошибки (DNS, timeout, сеть, SSL и т.д.) - это 500
-            throw new \Exception('Failed to check URL: ' . $e->getMessage(), 500);
+            throw new Exception('Failed to check URL: ' . $e->getMessage(), 500);
         }
         $content = $res->getBody()->getContents();
 

@@ -2,6 +2,15 @@
 
 Веб-приложение для анализа URL-адресов. Позволяет добавлять URL, проверять их доступность и получать информацию о содержимом страниц (статус код, заголовок, описание).
 
+# URL Analyzer
+
+[![hexlet-check](https://github.com/brahmanchik/php-project-9/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/brahmanchik/php-project-9/actions/workflows/hexlet-check.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=brahmanchik_php-project-9&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=brahmanchik_php-project-9)
+
+## Демонстрация
+
+[Посмотреть задеплоенное приложение](https://php-project-9-n5ou.onrender.com/)
+
 ## Минимальные системные требования
 
 - **PHP**: версия 8.2 или выше

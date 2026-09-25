@@ -4,6 +4,7 @@ namespace App;
 
 use PDO;
 use Dotenv\Dotenv;
+use RuntimeException;
 
 class Connection
 {
@@ -12,7 +13,7 @@ class Connection
     /**
      * Получить подключение к базе данных
      * @return PDO
-     * @throws \RuntimeException
+     * @throws RuntimeException
      */
     public static function getConnection(): PDO
     {
@@ -37,13 +38,13 @@ class Connection
         $databaseUrl = $_ENV['DATABASE_URL'] ?? '';
 
         if ($databaseUrl === '') {
-            throw new \RuntimeException('DATABASE_URL is not defined');
+            throw new RuntimeException('DATABASE_URL is not defined');
         }
 
         $url = parse_url($databaseUrl);
 
         if ($url === false) {
-            throw new \RuntimeException('DATABASE_URL has invalid format');
+            throw new RuntimeException('DATABASE_URL has invalid format');
         }
 
         $host = $url['host'] ?? 'localhost';

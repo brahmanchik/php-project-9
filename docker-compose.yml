@@ -1,6 +1,5 @@
 ---
 
-version: '3'
 
 services:
   web:
@@ -8,7 +7,27 @@ services:
       context: .
     command: make start
     ports:
-      - "8080:8080"
+      - "8080:8000"
     volumes:
       - ".:/app"
       - "/tmp:/tmp"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: page_analyzer
+      POSTGRES_USER: page_analyzer
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U page_analyzer -d page_analyzer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - "postgres_data:/var/lib/postgresql/data"
+
+volumes:
+  postgres_data:
