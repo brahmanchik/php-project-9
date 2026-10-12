@@ -1,11 +1,10 @@
 # URL Analyzer
 
-Веб-приложение для анализа URL-адресов. Позволяет добавлять URL, проверять их доступность и получать информацию о содержимом страниц (статус код, заголовок, описание).
-
-# URL Analyzer
-
 [![hexlet-check](https://github.com/brahmanchik/php-project-9/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/brahmanchik/php-project-9/actions/workflows/hexlet-check.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=brahmanchik_php-project-9&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=brahmanchik_php-project-9)
+
+Веб-приложение для анализа URL-адресов. Оно добавляет сайты, проверяет их доступность и получает
+SEO-данные страницы: код ответа, заголовок `h1`, содержимое `title` и `description`.
 
 ## Демонстрация
 
@@ -13,7 +12,7 @@
 
 ## Минимальные системные требования
 
-- **PHP**: версия 8.2 или выше
+- **PHP**: версия 8.3 или выше
 - **PostgreSQL**: версия 12 или выше
 - **Composer**: для управления зависимостями
 - **Docker** и **Docker Compose** (опционально, для запуска через Docker)
@@ -23,23 +22,44 @@
 ### Вариант 1: Установка через Docker (рекомендуется)
 
 1. Клонируйте репозиторий:
-   git clone <url-репозитория>
-   cd php-project-9.
-2. Создайте файл `.env` в корне проекта:
-   DATABASE_URL=postgresql://username:password@localhost:5432/database_name3. Запустите проект через Docker Compose:
-   
-3. docker-compose up --build Приложение будет доступно по адресу: `http://localhost:8080`
 
+   ```bash
+   git clone https://github.com/brahmanchik/php-project-9.git
+   cd php-project-9
+   ```
 
-## Запуск проекта Через Docker
+2. Соберите и запустите контейнеры:
 
-docker-compose up
-make start
-Приложение будет доступно по адресу: http://localhost:8000
+   ```bash
+   docker compose up --build
+   ```
+
+Docker Compose запустит PostgreSQL, передаст приложению `DATABASE_URL`, подготовит таблицы командой
+`make db-prepare` и запустит веб-сервер. Приложение будет доступно по адресу
+[http://localhost:8080](http://localhost:8080).
+
+### Вариант 2: Локальный запуск без Docker
+
+1. Установите зависимости:
+
+   ```bash
+   composer install
+   ```
+
+2. Скопируйте `.env.example` в `.env` и укажите в `DATABASE_URL` параметры своей базы PostgreSQL.
+
+3. Подготовьте базу и запустите приложение:
+
+   ```bash
+   make db-prepare
+   make start
+   ```
+
+Приложение будет доступно по адресу [http://localhost:8000](http://localhost:8000).
 
 ## Технологии
 
-- **PHP 8.2+**
+- **PHP 8.3+**
 - **Slim Framework 4** - веб-фреймворк
 - **PostgreSQL** - база данных
 - **Guzzle HTTP** - для HTTP запросов

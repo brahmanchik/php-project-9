@@ -5,7 +5,9 @@ services:
   web:
     build:
       context: .
-    command: make start
+    command: sh -c "make db-prepare && make start"
+    environment:
+      DATABASE_URL: postgresql://page_analyzer:password@db:5432/page_analyzer
     ports:
       - "8080:8000"
     volumes:

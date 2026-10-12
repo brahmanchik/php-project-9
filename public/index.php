@@ -1,21 +1,21 @@
 <?php
 
-session_start();
-require __DIR__ . '/../vendor/autoload.php';
-
 use App\Connection;
 use App\Exception\UrlNotFoundException;
 use App\UrlChecker;
 use App\UrlHelper;
 use App\UrlRepository;
 use DI\Container;
-use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Exception\HttpNotFoundException;
 use Slim\Factory\AppFactory;
 use Slim\Flash\Messages;
+use Slim\Http\Response;
 use Slim\Views\PhpRenderer;
 use Valitron\Validator;
+
+session_start();
+require __DIR__ . '/../vendor/autoload.php';
 
 $container = new Container();
 $container->set('flash', function () {
@@ -23,7 +23,10 @@ $container->set('flash', function () {
 });
 
 $container->set(PhpRenderer::class, function () {
-    return new PhpRenderer(__DIR__ . '/../templates');
+    $renderer = new PhpRenderer(__DIR__ . '/../templates');
+    $renderer->setLayout('layout.phtml');
+
+    return $renderer;
 });
 
 // Подключение к базе данных
@@ -50,8 +53,10 @@ $container->set(Validator::class, function () {
 });
 
 $app = AppFactory::createFromContainer($container);
+$routeParser = $app->getRouteCollector()->getRouteParser();
+$container->get(PhpRenderer::class)->addAttribute('routeParser', $routeParser);
 
-//обработка ошибок
+// Обработка ошибок
 // Define Custom Error Handler
 $customErrorHandler = function (
     Request $request,
@@ -63,18 +68,18 @@ $customErrorHandler = function (
     $renderer = $app->getContainer()->get(PhpRenderer::class);
 
     // 404 - ресурс не найден в БД
-    if ($exception instanceof UrlNotFoundException)  {
+    if ($exception instanceof UrlNotFoundException) {
         $response = $app->getResponseFactory()->createResponse(404);
-        return $renderer->render($response, '404.phtml');
+        return $renderer->render($response, 'errors/404.phtml');
     }
     // 404 - роут не найден (Slim выбрасывает HttpNotFoundException)
     if ($exception instanceof HttpNotFoundException) {
         $response = $app->getResponseFactory()->createResponse(404);
-        return $renderer->render($response, '404.phtml');
+        return $renderer->render($response, 'errors/404.phtml');
     }
 
     $response = $app->getResponseFactory()->createResponse(500);
-    return $renderer->render($response, '500.phtml');
+    return $renderer->render($response, 'errors/500.phtml');
 };
 
 $app->addRoutingMiddleware();
@@ -88,16 +93,17 @@ $app->get('/', function (Request $request, Response $response) {
     $flash = $this->get('flash');
     $errors = $flash->getMessage('error'); // массив сообщений
     $viewData = [
-        'errors' => $errors
+        'errors' => $errors,
+        'urlName' => '',
     ];
     return $renderer->render($response, 'index.phtml', $viewData);
-})->setName('index');
+})->setName('home');
 
-$app->post('/urls', function (Request $request, Response $response) {
+$app->post('/urls', function (Request $request, Response $response) use ($routeParser) {
     $flash = $this->get('flash');
 
     $body = $request->getParsedBody();
-    $urlName = $body['url']['name'] ?? '';
+    $urlName = (string) ($body['url']['name'] ?? '');
 
     $validator = $this
         ->get(Validator::class)
@@ -112,7 +118,10 @@ $app->post('/urls', function (Request $request, Response $response) {
         return $renderer->render(
             $response->withStatus(422),
             'index.phtml',
-            ['errors' => $urlErrors]
+            [
+                'errors' => $urlErrors,
+                'urlName' => $urlName,
+            ]
         );
     }
 
@@ -124,21 +133,24 @@ $app->post('/urls', function (Request $request, Response $response) {
     if ($existingUrlId !== null) {
         $flash->addMessage('success', 'Страница уже существует');
 
-        return $response
-            ->withHeader('Location', "/urls/{$existingUrlId}")
-            ->withStatus(302);
+        $url = $routeParser->urlFor(
+            'urls.show',
+            ['id' => (string) $existingUrlId]
+        );
+
+        return $response->withRedirect($url);
     }
 
-        $flash->addMessage('success', 'Страница успешно добавлена');
-        $stmt = $this->get(PDO::class)->prepare("INSERT INTO urls (name) VALUES (:name)");
-        $stmt->bindValue(':name', $urlName, PDO::PARAM_STR);
-        $stmt->execute();
+    $flash->addMessage('success', 'Страница успешно добавлена');
+    $stmt = $this->get(PDO::class)->prepare("INSERT INTO urls (name) VALUES (:name)");
+    $stmt->bindValue(':name', $urlName, PDO::PARAM_STR);
+    $stmt->execute();
 
-        $id = $this->get(PDO::class)->lastInsertId();
-        return $response
-            ->withHeader('Location', "/urls/{$id}")
-            ->withStatus(302);
-});
+    $id = (string) $this->get(PDO::class)->lastInsertId();
+    $url = $routeParser->urlFor('urls.show', ['id' => $id]);
+
+    return $response->withRedirect($url);
+})->setName('urls.store');
 
 $app->get('/urls/{id:[0-9]+}', function (Request $request, Response $response, array $args) {
     $renderer = $this->get(PhpRenderer::class);
@@ -150,7 +162,12 @@ $app->get('/urls/{id:[0-9]+}', function (Request $request, Response $response, a
     $urlData = $urlRepository->getById($id);
 
     $dbh = $this->get(PDO::class);
-    $stmt = $dbh->prepare("SELECT * FROM url_checks WHERE url_id = :id");
+    $stmt = $dbh->prepare(
+        "SELECT id, url_id, status_code, h1, title, description, created_at
+        FROM url_checks
+        WHERE url_id = :id
+        ORDER BY id DESC"
+    );
     $stmt->bindValue(':id', $id);
     $stmt->execute();
     $checks = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -163,9 +180,9 @@ $app->get('/urls/{id:[0-9]+}', function (Request $request, Response $response, a
         'success' => $success,
         'errors' => $errors,
         'checks' => $checks,
-        ];
-    return $renderer->render($response, 'url.phtml', $viewData);
-});
+    ];
+    return $renderer->render($response, 'urls/show.phtml', $viewData);
+})->setName('urls.show');
 
 $app->get('/urls', function (Request $request, Response $response) {
     $renderer = $this->get(PhpRenderer::class);
@@ -215,12 +232,16 @@ $app->get('/urls', function (Request $request, Response $response) {
 
     return $renderer->render(
         $response,
-        'urls.phtml',
+        'urls/index.phtml',
         ['urls' => $urlsWithChecks]
     );
-});
+})->setName('urls.index');
 
-$app->post('/urls/{url_id:[0-9]+}/checks', function (Request $request, Response $response, array $args) {
+$app->post('/urls/{url_id:[0-9]+}/checks', function (
+    Request $request,
+    Response $response,
+    array $args
+) use ($routeParser) {
     $id = (int) $args['url_id'];
     $urlCheck = $this->get(UrlChecker::class);
     $urlRepository = $this->get(UrlRepository::class);
@@ -236,9 +257,9 @@ $app->post('/urls/{url_id:[0-9]+}/checks', function (Request $request, Response 
             'Произошла ошибка при проверке, не удалось подключиться'
         );
 
-        return $response
-            ->withHeader('Location', "/urls/{$id}")
-            ->withStatus(302);
+        $url = $routeParser->urlFor('urls.show', ['id' => (string) $id]);
+
+        return $response->withRedirect($url);
     }
 
     $statusCode = $data['status_code'];
@@ -256,9 +277,9 @@ $app->post('/urls/{url_id:[0-9]+}/checks', function (Request $request, Response 
     $stmt->execute();
 
     $flash->addMessage('success', 'Страница успешно проверена');
-    return $response
-        ->withHeader('Location', "/urls/{$id}")
-        ->withStatus(302);
-});
+    $url = $routeParser->urlFor('urls.show', ['id' => (string) $id]);
+
+    return $response->withRedirect($url);
+})->setName('urls.checks.store');
 
 $app->run();
