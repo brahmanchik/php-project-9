@@ -14,7 +14,17 @@ class UrlChecker
     public function getData(string $siteName): array
     {
         $response = $this->client->request('GET', $siteName, ['http_errors' => false]);
-        $data = ['status_code' => $response->getStatusCode()];
+        $data = [
+            'status_code' => $response->getStatusCode(),
+            'h1' => null,
+            'title' => null,
+            'description' => null,
+        ];
+
+        if ($data['status_code'] >= 400) {
+            return $data;
+        }
+
         $content = $response->getBody()->getContents();
 
         $crawler = new Crawler($content);

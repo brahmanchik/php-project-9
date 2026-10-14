@@ -237,7 +237,16 @@ $app->post('/urls/{url_id:[0-9]+}/checks', function (
 
     $this->get(UrlCheckRepository::class)->create($id, $data);
 
-    $flash->addMessage('success', 'Страница успешно проверена');
+    if ($data['status_code'] >= 400) {
+        $flash->addMessage(
+            'error',
+            'Произошла ошибка при проверке, не удалось подключиться к запрошенной странице. '
+                . 'Код ответа сайта: HTTP ' . $data['status_code']
+        );
+    } else {
+        $flash->addMessage('success', 'Страница успешно проверена');
+    }
+
     $url = $routeParser->urlFor('urls.show', ['id' => (string) $id]);
 
     return $response->withRedirect($url);

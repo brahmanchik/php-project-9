@@ -72,9 +72,9 @@ foreach ([200, 403, 404, 500] as $status) {
     test("UrlChecker возвращает данные для HTTP $status", function () use ($status, $html) {
         $data = checkerFor(new Response($status, [], $html))->getData('https://example.test');
         expect($data['status_code'] === $status, 'Потерян код ответа');
-        expect($data['h1'] === 'Заголовок', 'Потерян h1');
-        expect($data['title'] === 'Тест', 'Потерян title');
-        expect($data['description'] === 'Описание', 'Потерян description');
+        expect($data['h1'] === ($status >= 400 ? null : 'Заголовок'), 'Неверный h1');
+        expect($data['title'] === ($status >= 400 ? null : 'Тест'), 'Неверный title');
+        expect($data['description'] === ($status >= 400 ? null : 'Описание'), 'Неверный description');
     });
 }
 
@@ -229,6 +229,42 @@ test('Шаблоны используют единую обёртку экран
         }
     }
 });
+
+foreach ([403, 404, 500] as $status) {
+    test("Hexlet: ответ HTTP $status показывает ошибку без SEO страницы ошибки", function () use (
+        $status,
+        $app,
+        $container,
+        $requestFactory,
+        $checks,
+        &$flashStorage
+    ) {
+        $flashStorage = [];
+        $container->set('flash', new Messages($flashStorage));
+        $errorHtml = '<h1>Im wrong site, you shouldnt have my header</h1><title>Error page</title>';
+        $container->set(UrlChecker::class, checkerFor(new Response($status, [], $errorHtml)));
+        $before = count($checks->checks);
+        $response = $app->handle($requestFactory->createServerRequest('POST', '/urls/1/checks'));
+
+        expect($response->getHeaderLine('Location') === '/urls/1', 'Нет возврата к карточке');
+        expect(count($checks->checks) === $before + 1, 'Код HTTP не сохранён, нарушено замечание наставника');
+        expect($checks->checks[$before]['status_code'] === $status, 'Неверный код HTTP');
+        expect(isset($flashStorage['slimFlash']['error']), 'Hexlet ожидает сообщение об ошибке');
+        expect(!isset($flashStorage['slimFlash']['success']), 'Ошибка сайта показана как успех');
+
+        $container->set('flash', new Messages($flashStorage));
+        $page = $app->handle($requestFactory->createServerRequest('GET', '/urls/1'));
+        $body = (string) $page->getBody();
+        expect(
+            str_contains($body, 'Произошла ошибка при проверке, не удалось подключиться'),
+            'Не показано сообщение, ожидаемое Hexlet'
+        );
+        expect(!str_contains($body, 'Im wrong site, you shouldnt have my header'), 'Сохранён h1 страницы ошибки');
+        expect($checks->checks[$before]['h1'] === null, 'h1 страницы ошибки попал в результат');
+        expect($checks->checks[$before]['title'] === null, 'title страницы ошибки попал в результат');
+        expect($checks->checks[$before]['description'] === null, 'description страницы ошибки попал в результат');
+    });
+}
 
 unlink($errorLog);
 echo "\nРезультат: $passed успешно, $failed с ошибкой.\n";
