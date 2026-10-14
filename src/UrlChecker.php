@@ -2,54 +2,33 @@
 
 namespace App;
 
-use App\Exception\UrlNotFoundException;
-use Exception;
-use GuzzleHttp\Client;
+use GuzzleHttp\ClientInterface;
 use Symfony\Component\DomCrawler\Crawler;
-use Throwable;
 
 class UrlChecker
 {
-    public function getData(string $siteName) //переименовать в getData например
+    public function __construct(private ClientInterface $client)
     {
-        try {
-            $client = new Client([
-                'timeout' => 10,
-                'connect_timeout' => 5,
-                'http_errors' => false,
-            ]);
-            $res = $client->request('GET', $siteName);
-            $statusCode = $res->getStatusCode();
+    }
 
-            if ($statusCode >= 400) {
-                throw new UrlNotFoundException(
-                    'URL returned an unsuccessful status code'
-                );
-            }
-            $data['status_code'] = $statusCode;
-        } catch (UrlNotFoundException $e) {
-            // Сайт недоступен (DNS, timeout и т.п.)
-            throw $e;
-        } catch (Throwable $e) {
-            // Все остальные ошибки (DNS, timeout, сеть, SSL и т.д.) - это 500
-            throw new Exception('Failed to check URL: ' . $e->getMessage(), 500);
-        }
-        $content = $res->getBody()->getContents();
+    public function getData(string $siteName): array
+    {
+        $response = $this->client->request('GET', $siteName, ['http_errors' => false]);
+        $data = ['status_code' => $response->getStatusCode()];
+        $content = $response->getBody()->getContents();
 
         $crawler = new Crawler($content);
 
         $data['h1'] = $this->truncate(
-            optional($crawler->filter('h1')->getNode(0))?->textContent
+            $crawler->filter('h1')->getNode(0)?->textContent
         );
 
         $data['title'] = $this->truncate(
-            optional($crawler->filter('title')->getNode(0))?->textContent
+            $crawler->filter('title')->getNode(0)?->textContent
         );
 
         $data['description'] = $this->truncate(
-            optional(
-                $crawler->filter('meta[name="description"]')->getNode(0)
-            )?->getAttribute('content')
+            $crawler->filter('meta[name="description"]')->getNode(0)?->getAttribute('content')
         );
 
         return $data;

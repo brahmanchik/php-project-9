@@ -6,5 +6,8 @@ use Exception;
 
 class UrlNotFoundException extends Exception
 {
-    // Просто наследуемся от Exception
+    public function __construct(string $message = 'URL not found')
+    {
+        parent::__construct($message, 404);
+    }
 }

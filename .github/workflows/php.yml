@@ -6,7 +6,7 @@ on:
 
 jobs:
   phpcs:
-    name: Code style check
+    name: Code style and regression checks
     runs-on: ubuntu-latest
 
     steps:
@@ -18,10 +18,13 @@ jobs:
         with:
           php-version: '8.3'
           tools: composer
-          extensions: mbstring
+          extensions: mbstring, dom
 
       - name: Install dependencies
         run: composer install --no-progress --prefer-dist --no-interaction
 
       - name: Run PHP_CodeSniffer
-        run: ./vendor/bin/phpcs --standard=PSR12 src
+        run: make lint
+
+      - name: Run regression tests
+        run: make test

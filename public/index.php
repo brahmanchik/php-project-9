@@ -1,13 +1,16 @@
 <?php
 
 use App\Connection;
-use App\Exception\UrlNotFoundException;
+use App\UrlCheckRepository;
 use App\UrlChecker;
 use App\UrlHelper;
 use App\UrlRepository;
 use DI\Container;
+use GuzzleHttp\Client;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Exception\RequestException;
 use Psr\Http\Message\ServerRequestInterface as Request;
-use Slim\Exception\HttpNotFoundException;
 use Slim\Factory\AppFactory;
 use Slim\Flash\Messages;
 use Slim\Http\Response;
@@ -16,6 +19,7 @@ use Valitron\Validator;
 
 session_start();
 require __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../src/helpers.php';
 
 $container = new Container();
 $container->set('flash', function () {
@@ -32,6 +36,13 @@ $container->set(PhpRenderer::class, function () {
 // Подключение к базе данных
 $container->set(PDO::class, function () {
     return Connection::getConnection();
+});
+
+$container->set(ClientInterface::class, function () {
+    return new Client([
+        'timeout' => 10,
+        'connect_timeout' => 5,
+    ]);
 });
 
 $container->set(Validator::class, function () {
@@ -57,7 +68,6 @@ $routeParser = $app->getRouteCollector()->getRouteParser();
 $container->get(PhpRenderer::class)->addAttribute('routeParser', $routeParser);
 
 // Обработка ошибок
-// Define Custom Error Handler
 $customErrorHandler = function (
     Request $request,
     Throwable $exception,
@@ -67,15 +77,13 @@ $customErrorHandler = function (
 ) use ($app) {
     $renderer = $app->getContainer()->get(PhpRenderer::class);
 
-    // 404 - ресурс не найден в БД
-    if ($exception instanceof UrlNotFoundException) {
+    if ($exception->getCode() === 404) {
         $response = $app->getResponseFactory()->createResponse(404);
         return $renderer->render($response, 'errors/404.phtml');
     }
-    // 404 - роут не найден (Slim выбрасывает HttpNotFoundException)
-    if ($exception instanceof HttpNotFoundException) {
-        $response = $app->getResponseFactory()->createResponse(404);
-        return $renderer->render($response, 'errors/404.phtml');
+
+    if ($logErrors) {
+        error_log($logErrorDetails ? (string) $exception : $exception->getMessage());
     }
 
     $response = $app->getResponseFactory()->createResponse(500);
@@ -83,11 +91,10 @@ $customErrorHandler = function (
 };
 
 $app->addRoutingMiddleware();
-// Add Error Middleware
-$errorMiddleware = $app->addErrorMiddleware(true, true, true);
+$errorMiddleware = $app->addErrorMiddleware(false, true, true);
 $errorMiddleware->setDefaultErrorHandler($customErrorHandler);
 
-// Define app routes
+// Маршруты
 $app->get('/', function (Request $request, Response $response) {
     $renderer = $this->get(PhpRenderer::class);
     $flash = $this->get('flash');
@@ -127,8 +134,8 @@ $app->post('/urls', function (Request $request, Response $response) use ($routeP
 
     $urlName = UrlHelper::normalize($urlName);
 
-    $urlHelper = $this->get(UrlHelper::class);
-    $existingUrlId = $urlHelper->findIdByUrl($urlName);
+    $urlRepository = $this->get(UrlRepository::class);
+    $existingUrlId = $urlRepository->findIdByName($urlName);
 
     if ($existingUrlId !== null) {
         $flash->addMessage('success', 'Страница уже существует');
@@ -141,13 +148,9 @@ $app->post('/urls', function (Request $request, Response $response) use ($routeP
         return $response->withRedirect($url);
     }
 
+    $id = $urlRepository->create($urlName);
     $flash->addMessage('success', 'Страница успешно добавлена');
-    $stmt = $this->get(PDO::class)->prepare("INSERT INTO urls (name) VALUES (:name)");
-    $stmt->bindValue(':name', $urlName, PDO::PARAM_STR);
-    $stmt->execute();
-
-    $id = (string) $this->get(PDO::class)->lastInsertId();
-    $url = $routeParser->urlFor('urls.show', ['id' => $id]);
+    $url = $routeParser->urlFor('urls.show', ['id' => (string) $id]);
 
     return $response->withRedirect($url);
 })->setName('urls.store');
@@ -160,18 +163,7 @@ $app->get('/urls/{id:[0-9]+}', function (Request $request, Response $response, a
     $id = (int) $args['id'];
     $urlRepository = $this->get(UrlRepository::class);
     $urlData = $urlRepository->getById($id);
-
-    $dbh = $this->get(PDO::class);
-    $stmt = $dbh->prepare(
-        "SELECT id, url_id, status_code, h1, title, description, created_at
-        FROM url_checks
-        WHERE url_id = :id
-        ORDER BY id DESC"
-    );
-    $stmt->bindValue(':id', $id);
-    $stmt->execute();
-    $checks = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
+    $checks = $this->get(UrlCheckRepository::class)->getByUrlId($id);
 
     $viewData = [
         'id' => $urlData['id'],
@@ -186,28 +178,8 @@ $app->get('/urls/{id:[0-9]+}', function (Request $request, Response $response, a
 
 $app->get('/urls', function (Request $request, Response $response) {
     $renderer = $this->get(PhpRenderer::class);
-    $dbh = $this->get(PDO::class);
-
-    // Первый простой запрос: получаем все URL
-    $urlsStatement = $dbh->query(
-        "SELECT id, name
-        FROM urls
-        ORDER BY id DESC"
-    );
-
-    $urls = $urlsStatement->fetchAll(PDO::FETCH_ASSOC);
-
-    // Второй запрос: получаем только последнюю проверку каждого URL
-    $checksStatement = $dbh->query(
-        "SELECT DISTINCT ON (url_id)
-            url_id,
-            status_code,
-            created_at AS last_check_at
-        FROM url_checks
-        ORDER BY url_id, created_at DESC, id DESC"
-    );
-
-    $latestChecks = $checksStatement->fetchAll(PDO::FETCH_ASSOC);
+    $urls = $this->get(UrlRepository::class)->getAll();
+    $latestChecks = $this->get(UrlCheckRepository::class)->getLatestByUrlId();
 
     // Создаём массив, где ключ — ID сайта
     $checksByUrlId = [];
@@ -251,7 +223,8 @@ $app->post('/urls/{url_id:[0-9]+}/checks', function (
 
     try {
         $data = $urlCheck->getData($urlData['name']);
-    } catch (Throwable $exception) {
+    } catch (ConnectException | RequestException $exception) {
+        error_log((string) $exception);
         $flash->addMessage(
             'error',
             'Произошла ошибка при проверке, не удалось подключиться'
@@ -262,19 +235,7 @@ $app->post('/urls/{url_id:[0-9]+}/checks', function (
         return $response->withRedirect($url);
     }
 
-    $statusCode = $data['status_code'];
-    $h1 = $data['h1'];
-    $title = $data['title'];
-    $description = $data['description'];
-    $dbh = $this->get(PDO::class);
-    $stmt = $dbh->prepare("INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
-                                    VALUES (:url_id, :status_code, :h1, :title, :description, NOW()::timestamp(0))");
-    $stmt->bindValue(':url_id', $id, PDO::PARAM_INT);
-    $stmt->bindValue(':status_code', $statusCode, PDO::PARAM_INT);
-    $stmt->bindValue(':h1', $h1, PDO::PARAM_STR);
-    $stmt->bindValue(':title', $title, PDO::PARAM_STR);
-    $stmt->bindValue(':description', $description, PDO::PARAM_STR);
-    $stmt->execute();
+    $this->get(UrlCheckRepository::class)->create($id, $data);
 
     $flash->addMessage('success', 'Страница успешно проверена');
     $url = $routeParser->urlFor('urls.show', ['id' => (string) $id]);

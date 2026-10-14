@@ -17,7 +17,7 @@ class UrlRepository
     public function getById(int $id): array
     {
         $stmt = $this->dbh->prepare(
-            "SELECT * FROM urls WHERE id = :id"
+            "SELECT id, name, created_at FROM urls WHERE id = :id"
         );
         $stmt->bindValue(':id', $id, PDO::PARAM_INT);
         $stmt->execute();
@@ -27,5 +27,29 @@ class UrlRepository
             throw new UrlNotFoundException('URL not found');
         }
         return $row;
+    }
+
+    public function findIdByName(string $name): ?int
+    {
+        $stmt = $this->dbh->prepare("SELECT id FROM urls WHERE name = :name LIMIT 1");
+        $stmt->execute(['name' => $name]);
+        $id = $stmt->fetchColumn();
+
+        return $id === false ? null : (int) $id;
+    }
+
+    public function create(string $name): int
+    {
+        $stmt = $this->dbh->prepare("INSERT INTO urls (name) VALUES (:name) RETURNING id");
+        $stmt->execute(['name' => $name]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    public function getAll(): array
+    {
+        $stmt = $this->dbh->query("SELECT id, name, created_at FROM urls ORDER BY id DESC");
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
